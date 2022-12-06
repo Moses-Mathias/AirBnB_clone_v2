@@ -1,52 +1,62 @@
-# Puppet for setup, Redo the task #0
-exec { 'Update Packages':
-  command  => 'sudo apt-get update -y',
-  provider => shell
-}
-exec { 'Install Nginx':
-  command  => 'sudo apt-get install nginx -y',
-  provider => shell,
-  require  => Exec['Update Packages']
-}
-exec { 'Create Shared Folder':
-  command  => 'sudo mkdir -p /data/web_static/shared/',
-  provider => shell,
-  require  => Exec['Install Nginx']
-}
-exec { 'Create Test Folder':
-  command  => 'sudo mkdir -p /data/web_static/releases/test/',
-  provider => shell,
-  require  => Exec['Create Shared Folder']
-}
-exec { 'Create Fake File':
-  command  => 'echo "Holberton School" > /data/web_static/releases/test/index.html',
-  provider => shell,
-  require  => Exec['Create Test Folder'],
-  returns  => [0, 1]
-}
-exec { 'Symbolic Link':
-  command  => 'sudo ln -sf /data/web_static/releases/test/ /data/web_static/current',
-  provider => shell,
-  require  => Exec['Create Fake File']
-}
-exec { 'Give Ownership':
-  command  => 'sudo chown -R ubuntu:ubuntu /data/',
-  provider => shell,
-  require  => Exec['Symbolic Link']
-}
-exec { 'Add Location':
-  command  => 'sudo sed -i "38i\\\n\tlocation \/hbnb_static\/ {\n\t\talias \/data\/web_static\/current\/;\n\t}\n" /etc/nginx/sites-enabled/default',
-  provider => shell,
-  require  => Exec['Give Ownership']
-}
-exec { 'Reload Nginx':
-  command  => 'sudo service nginx reload',
-  provider => shell,
-  require  => Exec['Add Location']
+# Script that configures Nginx server with some folders and files
 
-}
-exec { 'Restart Nginx':
-  command  => 'sudo service nginx restart',
+exec {'update':
   provider => shell,
-  require  => Exec['Reload Nginx']
+  command  => 'sudo apt-get -y update',
+  before   => Exec['install Nginx'],
+}
+
+exec {'install Nginx':
+  provider => shell,
+  command  => 'sudo apt-get -y install nginx',
+  before   => Exec['start Nginx'],
+}
+
+exec {'start Nginx':
+  provider => shell,
+  command  => 'sudo service nginx start',
+  before   => Exec['create first directory'],
+}
+
+exec {'create first directory':
+  provider => shell,
+  command  => 'sudo mkdir -p /data/web_static/releases/test/',
+  before   => Exec['create second directory'],
+}
+
+exec {'create second directory':
+  provider => shell,
+  command  => 'sudo mkdir -p /data/web_static/shared/',
+  before   => Exec['content into html'],
+}
+
+exec {'content into html':
+  provider => shell,
+  command  => 'echo "Holberton School" | sudo tee /data/web_static/releases/test/index.html',
+  before   => Exec['symbolic link'],
+}
+
+exec {'symbolic link':
+  provider => shell,
+  command  => 'sudo ln -sf /data/web_static/releases/test/ /data/web_static/current',
+  before   => Exec['put location'],
+}
+
+exec {'put location':
+  provider => shell,
+  command  => 'sudo sed -i \'38i\\tlocation /hbnb_static/ {\n\t\talias /data/web_static/current/;\n\t\tautoindex off;\n\t}\n\' /etc/nginx/sites-available/default',
+  before   => Exec['restart Nginx'],
+}
+
+exec {'restart Nginx':
+  provider => shell,
+  command  => 'sudo service nginx restart',
+  before   => File['/data/']
+}
+
+file {'/data/':
+  ensure  => directory,
+  owner   => 'ubuntu',
+  group   => 'ubuntu',
+  recurse => true,
 }

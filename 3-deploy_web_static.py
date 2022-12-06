@@ -1,57 +1,63 @@
 #!/usr/bin/python3
-""" Program that creates and distributes an archive to your web servers,
-using the function deploy """
+""" Function that deploys """
 from datetime import datetime
 from fabric.api import *
-from os import path
+import os
+import shlex
 
-env.hosts = ['35.243.214.144', '34.233.133.27']
+
+env.hosts = ['35.231.33.237', '34.74.155.163']
+env.user = "ubuntu"
+
+
+def deploy():
+    """ DEPLOYS """
+    try:
+        archive_path = do_pack()
+    except:
+        return False
+
+    return do_deploy(archive_path)
 
 
 def do_pack():
-    """ Generates a .tgz archive from the contents of the web_static
-    folder of your AirBnB Clone repo """
-    date_str = datetime.now().strftime('%Y%m%d%H%M%S')
-    local("mkdir -p versions/")
     try:
-        local("tar -cvzf versions/web_static_{}.tgz web_static"
-              .format(date_str))
-        return "versions/web_static_{}.tgz".format(date_str)
-    except Exception:
+        if not os.path.exists("versions"):
+            local('mkdir versions')
+        t = datetime.now()
+        f = "%Y%m%d%H%M%S"
+        archive_path = 'versions/web_static_{}.tgz'.format(t.strftime(f))
+        local('tar -cvzf {} web_static'.format(archive_path))
+        return archive_path
+    except:
         return None
 
 
 def do_deploy(archive_path):
-    """ Distributes an archive to the web servers """
-    if not path.exists(archive_path):
+    """ Deploys """
+    if not os.path.exists(archive_path):
         return False
-    # split the path and get the second element in the list
-    file_path = archive_path.split("/")[1]
-    serv_folder = "/data/web_static/releases/" + file_path
-
     try:
+        name = archive_path.replace('/', ' ')
+        name = shlex.split(name)
+        name = name[-1]
+
+        wname = name.replace('.', ' ')
+        wname = shlex.split(wname)
+        wname = wname[0]
+
+        releases_path = "/data/web_static/releases/{}/".format(wname)
+        tmp_path = "/tmp/{}".format(name)
+
         put(archive_path, "/tmp/")
-        run("sudo mkdir -p " + serv_folder)
-        run("sudo tar -xzf /tmp/" + file_path + " -C " + serv_folder + "/")
-        run("sudo rm /tmp/" + file_path)
-        run("sudo mv " + serv_folder + "/web_static/* " + serv_folder)
-        run("sudo rm -rf " + serv_folder + "/web_static")
-        run("sudo rm -rf /data/web_static/current")
-        run("sudo ln -s " + serv_folder + " /data/web_static/current")
+        run("mkdir -p {}".format(releases_path))
+        run("tar -xzf {} -C {}".format(tmp_path, releases_path))
+        run("rm {}".format(tmp_path))
+        run("mv {}web_static/* {}".format(releases_path, releases_path))
+        run("rm -rf {}web_static".format(releases_path))
+        run("rm -rf /data/web_static/current")
+        run("ln -s {} /data/web_static/current".format(releases_path))
         print("New version deployed!")
         return True
-    except Exception:
+    except:
         return False
-
-
-def deploy():
-    """ Call the do_pack() function and store the path of the created archive
-    Call the do_deploy(archive_path) function, using the new
-    path of the new archive
-    Return False if no archive has been created
-    Return the return value of do_deploy"""
-    file_path = do_pack()
-    if file_path is None:
-        return False
-
-    return (do_deploy(file_path))
